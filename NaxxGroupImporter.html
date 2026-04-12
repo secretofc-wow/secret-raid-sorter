@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Naxx Group Importer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0d1117;color:#e6edf3;font-family:Arial,sans-serif;padding:20px}
+h1{color:#ffd700;font-size:20px;margin-bottom:4px}
+.subtitle{color:#888;font-size:13px;margin-bottom:20px}
+.card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin-bottom:16px}
+.card h2{color:#ffd700;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+textarea{width:100%;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:10px;font-size:12px;font-family:monospace;resize:vertical}
+button{padding:8px 18px;border-radius:6px;border:none;cursor:pointer;font-size:13px;font-weight:700}
+.btn-primary{background:#ffd700;color:#0d1117}
+.btn-primary:hover{background:#ffec5c}
+.btn-copy{background:#21262d;color:#e6edf3;border:1px solid #30363d;padding:5px 12px;font-size:11px;border-radius:4px}
+.btn-copy:hover{background:#30363d}
+.btn-copy.copied{background:#1a3a1a;color:#00ff88;border-color:#00ff88}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.tab{padding:7px 14px;border-radius:6px;border:1px solid #30363d;cursor:pointer;font-size:12px;background:#161b22;color:#888;transition:all .15s}
+.tab.active{background:#0f3460;border-color:#ffd700;color:#ffd700;font-weight:700}
+.groups-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.group-card{border:1px solid #30363d;border-radius:6px;overflow:hidden}
+.group-header{background:#0f3460;color:#ffd700;font-size:11px;font-weight:700;text-align:center;padding:5px;border-bottom:1px solid #30363d}
+.slot{display:flex;align-items:center;gap:6px;padding:4px 8px;border-bottom:1px solid #1c2128;font-size:12px}
+.slot:last-child{border-bottom:none}
+.slot input{flex:1;background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:3px;padding:3px 6px;font-size:11px;width:100%}
+.slot input:focus{outline:none;border-color:#ffd700}
+.slot-num{color:#555;font-size:10px;min-width:14px}
+.wa-box{background:#0d1117;border:1px solid #00ff88;border-radius:6px;padding:10px;font-family:monospace;font-size:11px;color:#00ff88;word-break:break-all;line-height:1.6;min-height:40px}
+.wa-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px}
+.wa-label{color:#888;font-size:11px;min-width:110px;padding-top:2px}
+.stats{display:flex;gap:16px;font-size:12px;margin-bottom:10px}
+.stat{padding:4px 10px;border-radius:4px;background:#21262d}
+.stat.ok{color:#00ff88}
+.stat.warn{color:#ff4444}
+.stat.info{color:#ffd700}
+.name-table{width:100%;border-collapse:collapse;font-size:12px}
+.name-table th{background:#0f3460;color:#ffd700;padding:5px 8px;text-align:left;border:1px solid #30363d}
+.name-table td{padding:4px 8px;border:1px solid #1c2128;background:#161b22}
+.name-table td input{background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:3px;padding:2px 6px;font-size:11px;width:100%}
+.name-table td input:focus{outline:none;border-color:#ffd700}
+.alert{padding:8px 12px;border-radius:6px;font-size:12px;margin-bottom:10px}
+.alert-info{background:#0f1f3a;border:1px solid #1e4a8a;color:#79b8ff}
+.alert-warn{background:#2d1a1a;border:1px solid #8a1e1e;color:#ff7b72}
+.section-label{font-size:11px;color:#888;margin-bottom:4px}
+</style>
+</head>
+<body>
+
+<h1>⚔ Naxx Group Importer</h1>
+<p class="subtitle">Paste your Comp Tool JSON export → fix names → assign groups → copy WeakAura strings</p>
+
+<div class="card">
+  <h2>Step 1 — Paste Comp Tool JSON</h2>
+  <textarea id="json-input" rows="5" placeholder='Paste the JSON export from raid-helper.xyz here...'></textarea>
+  <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+    <button class="btn-primary" onclick="importJSON()">Import</button>
+    <span id="import-status" style="font-size:12px;color:#888"></span>
+  </div>
+</div>
+
+<div id="main" style="display:none">
+
+<div class="card">
+  <h2>Step 2 — Fix Names (optional)</h2>
+  <p class="section-label">If someone's comp tool name doesn't match their character name, fix it here. These corrections apply to all group tabs.</p>
+  <div style="margin-top:8px">
+    <table class="name-table" id="corr-table">
+      <thead><tr><th>#</th><th>Comp Tool Name</th><th>Character Name (leave blank = no change)</th></tr></thead>
+      <tbody id="corr-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Step 3 — Assign Groups</h2>
+  <div class="tabs" id="boss-tabs"></div>
+  <div id="groups-area"></div>
+
+  <div style="margin-top:12px">
+    <div class="stats" id="stats-row"></div>
+    <div class="wa-row">
+      <span class="wa-label">WeakAura string:</span>
+      <div style="flex:1">
+        <div class="wa-box" id="wa-output">—</div>
+        <div style="margin-top:4px;display:flex;gap:6px">
+          <button class="btn-copy" onclick="copyWA()">Copy</button>
+          <span style="font-size:11px;color:#555;padding-top:3px">Paste into WeakAura → Author Options → Roster:</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Step 4 — All WeakAura Strings</h2>
+  <p class="section-label" style="margin-bottom:10px">One string per boss button. Paste each into the corresponding WeakAura child aura.</p>
+  <div id="all-strings"></div>
+</div>
+
+</div>
+
+<script>
+const BOSSES = [
+  {id:'default', label:'Default / Trash', color:'#1a3a1a'},
+  {id:'gothik',  label:'Gothik',          color:'#1a1a3a'},
+  {id:'4hm',     label:'Four Horsemen',   color:'#3a1a1a'},
+  {id:'saph',    label:'Sapphiron',       color:'#1a2a3a'},
+  {id:'kt',      label:"Kel'Thuzad",      color:'#2a1a3a'},
+];
+
+let players = [];
+let corrections = {};
+// groups[bossId][groupNum(1-8)][slot(0-4)] = name
+let groups = {};
+let currentBoss = 'default';
+
+BOSSES.forEach(b => {
+  groups[b.id] = {};
+  for(let g=1;g<=8;g++){
+    groups[b.id][g] = ['','','','',''];
+  }
+});
+
+function importJSON(){
+  const raw = document.getElementById('json-input').value.trim();
+  let data;
+  try { data = JSON.parse(raw); } catch(e){
+    document.getElementById('import-status').textContent = '✗ Invalid JSON';
+    document.getElementById('import-status').style.color='#ff4444';
+    return;
+  }
+
+  const slots = data.slots || [];
+  players = [];
+  const seen = {};
+
+  slots.forEach(s => {
+    if(s.groupNumber <= 8 && !seen[s.name]){
+      seen[s.name] = true;
+      players.push({
+        name: s.name,
+        group: s.groupNumber,
+        slot: s.slotNumber,
+        cls: s.className,
+        spec: s.specName,
+        conf: s.isConfirmed
+      });
+    }
+  });
+
+  players.sort((a,b)=> a.group - b.group || a.slot - b.slot);
+
+  document.getElementById('import-status').textContent = `✓ ${players.length} players imported`;
+  document.getElementById('import-status').style.color='#00ff88';
+
+  // Auto-fill default groups from comp tool order
+  BOSSES.forEach(b => {
+    for(let g=1;g<=8;g++) groups[b.id][g] = ['','','','',''];
+  });
+
+  const byGroup = {};
+  for(let g=1;g<=8;g++) byGroup[g]=[];
+  players.forEach(p=> (byGroup[p.group]||[]).push(p));
+  for(let g=1;g<=8;g++){
+    byGroup[g].forEach((p,i)=>{ if(i<5) groups['default'][g][i]=p.name; });
+  }
+  // Copy default into all other boss tabs as starting point
+  BOSSES.slice(1).forEach(b=>{
+    for(let g=1;g<=8;g++) groups[b.id][g]=[...groups['default'][g]];
+  });
+
+  buildCorrTable();
+  buildBossTabs();
+  renderGroups();
+  renderAllStrings();
+  document.getElementById('main').style.display='block';
+}
+
+function buildCorrTable(){
+  const tbody = document.getElementById('corr-body');
+  tbody.innerHTML='';
+  players.forEach((p,i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML=`
+      <td style="color:#555;text-align:center">${i+1}</td>
+      <td>${p.name}</td>
+      <td><input type="text" placeholder="${p.name}" data-orig="${p.name}" oninput="updateCorr(this)" value="${corrections[p.name]||''}"></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function updateCorr(input){
+  const orig = input.dataset.orig;
+  corrections[orig] = input.value.trim();
+  // Update any group cells that have this original name
+  BOSSES.forEach(b=>{
+    for(let g=1;g<=8;g++){
+      groups[b.id][g] = groups[b.id][g].map(n=> n===orig ? orig : n);
+    }
+  });
+  renderGroups();
+  renderAllStrings();
+}
+
+function resolveName(n){
+  if(!n) return '';
+  return (corrections[n] && corrections[n]!=='') ? corrections[n] : n;
+}
+
+function buildBossTabs(){
+  const tc = document.getElementById('boss-tabs');
+  tc.innerHTML='';
+  BOSSES.forEach(b=>{
+    const d=document.createElement('div');
+    d.className='tab'+(b.id===currentBoss?' active':'');
+    d.textContent=b.label;
+    d.onclick=()=>{
+      currentBoss=b.id;
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      d.classList.add('active');
+      renderGroups();
+    };
+    tc.appendChild(d);
+  });
+}
+
+function renderGroups(){
+  const area = document.getElementById('groups-area');
+  const g = groups[currentBoss];
+  let html='<div class="groups-grid">';
+  for(let gi=1;gi<=8;gi++){
+    html+=`<div class="group-card"><div class="group-header">Group ${gi}</div>`;
+    for(let si=0;si<5;si++){
+      const val = g[gi][si]||'';
+      const disp = resolveName(val);
+      html+=`<div class="slot">
+        <span class="slot-num">${si+1}</span>
+        <input type="text" value="${escHtml(val)}"
+          data-group="${gi}" data-slot="${si}"
+          list="player-list"
+          oninput="updateSlot(this)"
+          placeholder="—">
+      </div>`;
+    }
+    html+='</div>';
+  }
+  html+='</div>';
+
+  // Datalist of all player names
+  html+=`<datalist id="player-list">`;
+  players.forEach(p=> html+=`<option value="${escHtml(p.name)}">`);
+  html+='</datalist>';
+
+  area.innerHTML=html;
+  updateStats();
+  updateWAOutput();
+}
+
+function escHtml(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function updateSlot(input){
+  const g=parseInt(input.dataset.group);
+  const s=parseInt(input.dataset.slot);
+  groups[currentBoss][g][s]=input.value.trim();
+  updateStats();
+  updateWAOutput();
+  renderAllStrings();
+}
+
+function buildWAString(bossId){
+  const g=groups[bossId];
+  const names=[];
+  for(let gi=1;gi<=8;gi++){
+    for(let si=0;si<5;si++){
+      const n=g[gi][si];
+      if(n) names.push(resolveName(n).split('/')[0]);
+    }
+  }
+  return names.join(' ');
+}
+
+function updateWAOutput(){
+  const s=buildWAString(currentBoss);
+  document.getElementById('wa-output').textContent=s||'(fill in groups above)';
+}
+
+function updateStats(){
+  const g=groups[currentBoss];
+  let total=0, dupes=0;
+  const seen={};
+  for(let gi=1;gi<=8;gi++){
+    g[gi].forEach(n=>{
+      if(n){
+        total++;
+        const r=resolveName(n);
+        if(seen[r]) dupes++;
+        seen[r]=true;
+      }
+    });
+  }
+  const sr=document.getElementById('stats-row');
+  sr.innerHTML=`
+    <div class="stat ${total===40?'ok':'warn'}">Players: ${total} / 40</div>
+    <div class="stat ${dupes===0?'ok':'warn'}">Duplicates: ${dupes}</div>
+  `;
+}
+
+function copyWA(){
+  const s=buildWAString(currentBoss);
+  navigator.clipboard.writeText(s).then(()=>{
+    const btn=document.querySelector('.btn-copy');
+    btn.textContent='Copied!';
+    btn.classList.add('copied');
+    setTimeout(()=>{btn.textContent='Copy';btn.classList.remove('copied');},1500);
+  });
+}
+
+function renderAllStrings(){
+  const c=document.getElementById('all-strings');
+  let html='';
+  BOSSES.forEach(b=>{
+    const s=buildWAString(b.id);
+    const filled=Object.values(groups[b.id]).flat().filter(n=>n).length;
+    html+=`
+    <div style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="font-size:12px;font-weight:700;color:#ffd700">${b.label}</span>
+        <span style="font-size:11px;color:#555">${filled}/40 players</span>
+        <button class="btn-copy" onclick="copyString(this,'${b.id}')">Copy</button>
+      </div>
+      <div class="wa-box" style="font-size:10px">${escHtml(s)||'—'}</div>
+    </div>`;
+  });
+  c.innerHTML=html;
+}
+
+function copyString(btn, bossId){
+  const s=buildWAString(bossId);
+  navigator.clipboard.writeText(s).then(()=>{
+    btn.textContent='Copied!';
+    btn.classList.add('copied');
+    setTimeout(()=>{btn.textContent='Copy';btn.classList.remove('copied');},1500);
+  });
+}
+</script>
+</body>
+</html>
